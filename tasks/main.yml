@@ -1,0 +1,48 @@
+---
+- name: install zsh
+  apt: name=zsh state=present
+
+- name: get zsh location
+  command: which zsh
+  register: zsh_location
+  changed_when: false
+
+- name: set zsh as default shell
+  user: name={{ item.name }} shell={{ zsh_location.stdout }}
+  with_items: "{{ ohmyzsh_users }}"
+
+- name: install ohmyzsh
+  git: repo={{ ohmyzsh_repo }} dest=~/.oh-my-zsh
+  become: true
+  become_user: "{{ item.name }}"
+  with_items: "{{ ohmyzsh_users }}"
+
+- name: check .zshrc
+  command: grep 'source $ZSH/oh-my-zsh.sh' ~/.zshrc
+  become: true
+  become_user: "{{ item.name }}"
+  with_items: "{{ ohmyzsh_users }}"
+  register: zshrc_check
+  ignore_errors: true
+  changed_when: false
+
+- name: copy .zshrc template
+  command: cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc
+  become: true
+  become_user: "{{ item.item.name }}"
+  with_items: "{{ zshrc_check.results }}"
+  when: item.rc != 0
+
+- name: set user theme
+  replace: dest=~/.zshrc regexp=^(ZSH_THEME=\").*(\")$ replace="\1{{ item.theme }}\2"
+  become: true
+  become_user: "{{ item.name }}"
+  with_items: "{{ ohmyzsh_users }}"
+  when: item.theme is defined
+
+- name: set user plugins
+  replace: dest=~/.zshrc regexp="^(plugins=\().*(\))$" replace="\1{{ item.plugins|join(' ') }}\2"
+  become: true
+  become_user: "{{ item.name }}"
+  with_items: "{{ ohmyzsh_users }}"
+  when: item.plugins is defined
